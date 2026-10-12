@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <!-- viewport-fit=cover: Inhalt darf unter Notch / Home-Indicator laufen (wichtig für Pseudo-Fullscreen) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <!-- Als Web-App zum Home-Bildschirm hinzugefügt: läuft ohne Safari-UI (echtes "Vollbild" auf dem iPhone) -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#111111">
+  <title>Fullscreen-Test iPhone</title>
+  <style>
+    :root {
+      --bg: #f4f4f5;
+      --fg: #18181b;
+      --card: #ffffff;
+      --muted: #71717a;
+      --ok: #15803d;
+      --no: #b91c1c;
+      --accent: #2563eb;
+      --border: #e4e4e7;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #09090b;
+        --fg: #fafafa;
+        --card: #18181b;
+        --muted: #a1a1aa;
+        --ok: #4ade80;
+        --no: #f87171;
+        --accent: #60a5fa;
+        --border: #27272a;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+               max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    }
+    h1 { font-size: 1.4rem; margin: 0 0 4px; }
+    h2 { font-size: 1.05rem; margin: 0 0 8px; }
+    p  { margin: 0 0 10px; }
+    .muted { color: var(--muted); font-size: .9rem; }
+    main { max-width: 640px; margin: 0 auto; }
+    section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    td { padding: 5px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+    td:first-child { font-family: ui-monospace, Menlo, monospace; padding-right: 8px; word-break: break-all; }
+    td:last-child { text-align: right; white-space: nowrap; font-weight: 600; }
+    .yes { color: var(--ok); }
+    .no  { color: var(--no); }
+    button {
+      display: block;
+      width: 100%;
+      font: inherit;
+      font-weight: 600;
+      padding: 12px 14px;
+      margin: 8px 0;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+    button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+
+    /* Element, das in den Vollbildmodus soll */
+    #target {
+      position: relative;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      min-height: 180px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #7c3aed, #2563eb 55%, #0891b2);
+      color: #fff;
+      padding: 16px;
+    }
+    #target .exit { display: none; position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: auto; margin: 0; background: rgba(0,0,0,.45); }
+
+    /* Echter Fullscreen (Standard + WebKit-Prefix) */
+    #target:fullscreen         { border-radius: 0; }
+    #target:-webkit-full-screen { border-radius: 0; width: 100%; height: 100%; }
+    #target:fullscreen .exit,
+    #target:-webkit-full-screen .exit,
+    #target.pseudo-fullscreen .exit { display: block; }
+
+    /* Fallback: "Pseudo-Fullscreen" per CSS */
+    #target.pseudo-fullscreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      width: 100vw;
+      height: 100vh;      /* Fallback für alte Browser */
+      height: 100dvh;     /* passt sich an ein-/ausgeblendete Safari-Leisten an */
+      border-radius: 0;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    body.no-scroll { overflow: hidden; }
+
+    video { width: 100%; border-radius: 10px; background: #000; }
+
+    #log {
+      font: 12px/1.4 ui-monospace, Menlo, monospace;
+      background: #000;
+      color: #a3e635;
+      border-radius: 8px;
+      padding: 10px;
+      height: 180px;
+      overflow: auto;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+    code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>requestFullscreen auf dem iPhone</h1>
+  <p class="muted" id="ua"></p>
+
+  <!-- 1. Feature-Erkennung -->
+  <section>
+    <h2>1. Was unterstützt dieser Browser?</h2>
+    <table id="features"></table>
+  </section>
+
+  <!-- 2. Beliebiges Element -->
+  <section>
+    <h2>2. Element-Fullscreen (<code>element.requestFullscreen()</code>)</h2>
+    <p class="muted">Funktioniert auf Desktop-Safari und iPad. Auf dem iPhone ist die API für normale Elemente nicht verfügbar – der Button zeigt, was passiert.</p>
+    <div id="target">
+      <div>
+        <strong style="font-size:1.3rem">Ich will Vollbild!</strong><br>
+        <span id="target-state">normaler Modus</span>
+      </div>
+      <button class="exit" id="btn-exit">✕ Schliessen</button>
+    </div>
+    <button id="btn-element">Element: requestFullscreen()</button>
+    <button id="btn-smart" class="secondary">Mit Fallback (API → Pseudo-Fullscreen)</button>
+  </section>
+
+  <!-- 3. Video -->
+  <section>
+    <h2>3. Video-Fullscreen (<code>video.webkitEnterFullscreen()</code>)</h2>
+    <p class="muted">Der einzige Weg zu echtem Vollbild auf dem iPhone: der native iOS-Videoplayer.</p>
+    <video id="video" playsinline controls preload="metadata"
+           src="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"></video>
+    <button id="btn-video-std">Video: requestFullscreen()</button>
+    <button id="btn-video-webkit">Video: webkitEnterFullscreen()</button>
+  </section>
+
+  <!-- 4. Log -->
+  <section>
+    <h2>4. Log</h2>
+    <pre id="log"></pre>
+    <button id="btn-clear" class="secondary">Log leeren</button>
+  </section>
+
+  <section>
+    <h2>Hintergrund</h2>
+    <p class="muted">
+      • <b>iPhone (iOS Safari):</b> <code>document.fullscreenEnabled</code> ist <code>false</code>, <code>Element.prototype.requestFullscreen</code>
+      fehlt bzw. tut nichts. Ausnahme: <code>&lt;video&gt;</code> über <code>webkitEnterFullscreen()</code> (native Player-UI, keine eigene HTML-UI möglich).<br>
+      • <b>iPad (iPadOS ≥ 12):</b> <code>webkitRequestFullscreen()</code>, ab 16.4 auch ungeprefixt <code>requestFullscreen()</code>.<br>
+      • <b>Alternative auf dem iPhone:</b> Pseudo-Fullscreen per CSS (<code>position:fixed; height:100dvh</code>) oder die Seite
+      via „Zum Home-Bildschirm“ als Web-App starten (<code>display-mode: standalone</code> – ganz ohne Safari-Leisten).<br>
+      • Alle Fullscreen-Aufrufe müssen aus einer Benutzer-Geste (z.&nbsp;B. <code>click</code>) heraus erfolgen.
+    </p>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const logEl = $('log');
+  const target = $('target');
+  const video = $('video');
+
+  function log(msg) {
+    const t = new Date().toLocaleTimeString('de-CH');
+    logEl.textContent += `[${t}] ${msg}\n`;
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  $('ua').textContent = navigator.userAgent;
+
+  // ---------- 1. Feature-Erkennung ----------
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const features = {
+    'document.fullscreenEnabled': document.fullscreenEnabled === true,
+    'document.webkitFullscreenEnabled': document.webkitFullscreenEnabled === true,
+    'Element.prototype.requestFullscreen': typeof Element.prototype.requestFullscreen === 'function',
+    'Element.prototype.webkitRequestFullscreen': typeof Element.prototype.webkitRequestFullscreen === 'function',
+    'HTMLVideoElement…webkitEnterFullscreen': typeof HTMLVideoElement.prototype.webkitEnterFullscreen === 'function',
+    'HTMLVideoElement…webkitSupportsFullscreen': !!video.webkitSupportsFullscreen,
+    'Als Web-App gestartet (standalone)': standalone,
+  };
+  $('features').innerHTML = Object.entries(features)
+    .map(([k, v]) => `<tr><td>${k}</td><td class="${v ? 'yes' : 'no'}">${v ? '✔ ja' : '✘ nein'}</td></tr>`)
+    .join('');
+  log('Feature-Erkennung: ' + JSON.stringify(features));
+
+  // webkitSupportsFullscreen ist erst nach dem Laden der Metadaten verlässlich
+  video.addEventListener('loadedmetadata', () => {
+    log('video.webkitSupportsFullscreen (nach loadedmetadata) = ' + video.webkitSupportsFullscreen);
+  });
+
+  // ---------- Helfer ----------
+  function getFullscreenElement() {
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function requestFs(el) {
+    if (el.requestFullscreen) {
+      log('→ el.requestFullscreen()');
+      return el.requestFullscreen();
+    }
+    if (el.webkitRequestFullscreen) {
+      log('→ el.webkitRequestFullscreen()');
+      // Gibt kein Promise zurück
+      el.webkitRequestFullscreen();
+      return Promise.resolve();
+    }
+    return Promise.reject(new Error('Keine Fullscreen-API für dieses Element vorhanden'));
+  }
+
+  function exitFs() {
+    if (target.classList.contains('pseudo-fullscreen')) {
+      target.classList.remove('pseudo-fullscreen');
+      document.body.classList.remove('no-scroll');
+      $('target-state').textContent = 'normaler Modus';
+      log('Pseudo-Fullscreen beendet');
+      return;
+    }
+    if (document.exitFullscreen && document.fullscreenElement) return document.exitFullscreen();
+    if (document.webkitExitFullscreen) return document.webkitExitFullscreen();
+  }
+
+  function enterPseudoFullscreen() {
+    target.classList.add('pseudo-fullscreen');
+    document.body.classList.add('no-scroll');
+    $('target-state').textContent = 'Pseudo-Fullscreen (CSS)';
+    log('Pseudo-Fullscreen (CSS) aktiviert');
+  }
+
+  // ---------- 2. Element-Fullscreen ----------
+  $('btn-element').addEventListener('click', () => {
+    try {
+      requestFs(target)
+        .then(() => log('Promise erfüllt – fullscreenElement = ' + (getFullscreenElement()?.id || 'null')))
+        .catch((e) => log('✘ Fehler: ' + e.name + ': ' + e.message));
+    } catch (e) {
+      log('✘ Exception: ' + e.name + ': ' + e.message);
+    }
+  });
+
+  $('btn-smart').addEventListener('click', () => {
+    const apiAvailable = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+    if (!apiAvailable) {
+      log('Fullscreen-API nicht verfügbar → Fallback');
+      enterPseudoFullscreen();
+      return;
+    }
+    requestFs(target).catch((e) => {
+      log('API fehlgeschlagen (' + e.message + ') → Fallback');
+      enterPseudoFullscreen();
+    });
+  });
+
+  $('btn-exit').addEventListener('click', (e) => {
+    e.stopPropagation();
+    exitFs();
+  });
+
+  ['fullscreenchange', 'webkitfullscreenchange'].forEach((type) =>
+    document.addEventListener(type, () => {
+      const el = getFullscreenElement();
+      log(`Event ${type}: fullscreenElement = ${el ? (el.id || el.tagName) : 'null'}`);
+      if (!target.classList.contains('pseudo-fullscreen')) {
+        $('target-state').textContent = el === target ? 'echter Fullscreen' : 'normaler Modus';
+      }
+    })
+  );
+  ['fullscreenerror', 'webkitfullscreenerror'].forEach((type) =>
+    document.addEventListener(type, () => log(`✘ Event ${type}`))
+  );
+
+  // ---------- 3. Video-Fullscreen ----------
+  $('btn-video-std').addEventListener('click', () => {
+    try {
+      requestFs(video)
+        .then(() => log('Video: Promise erfüllt'))
+        .catch((e) => log('✘ Video: ' + e.name + ': ' + e.message));
+    } catch (e) {
+      log('✘ Video Exception: ' + e.name + ': ' + e.message);
+    }
+  });
+
+  $('btn-video-webkit').addEventListener('click', () => {
+    if (typeof video.webkitEnterFullscreen !== 'function') {
+      log('✘ video.webkitEnterFullscreen nicht vorhanden (kein iOS/WebKit?)');
+      return;
+    }
+    try {
+      log('→ video.webkitEnterFullscreen()');
+      video.webkitEnterFullscreen();
+      video.play().catch((e) => log('play(): ' + e.message));
+    } catch (e) {
+      // z. B. InvalidStateError, wenn Metadaten noch nicht geladen sind
+      log('✘ ' + e.name + ': ' + e.message);
+    }
+  });
+
+  // iOS-spezifische Events des nativen Video-Players
+  video.addEventListener('webkitbeginfullscreen', () => log('Event webkitbeginfullscreen (nativer iOS-Player offen)'));
+  video.addEventListener('webkitendfullscreen', () => log('Event webkitendfullscreen (nativer iOS-Player geschlossen)'));
+  video.addEventListener('webkitpresentationmodechanged', () =>
+    log('Event webkitpresentationmodechanged: ' + video.webkitPresentationMode));
+
+  $('btn-clear').addEventListener('click', () => (logEl.textContent = ''));
+</script>
+</body>
+</html>
