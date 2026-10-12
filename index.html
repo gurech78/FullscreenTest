@@ -109,6 +109,30 @@
     }
     body.no-scroll { overflow: hidden; }
 
+    /* Erzwungenes Querformat per CSS: Hält der Nutzer das Gerät im Hochformat,
+       wird das Element um 90° gedreht und mit vertauschten Massen dargestellt. */
+    @media (orientation: portrait) {
+      #target.force-landscape.pseudo-fullscreen,
+      #target.force-landscape:fullscreen {
+        inset: auto;
+        top: 50%;
+        left: 50%;
+        width: 100vh;     /* Fallback für alte Browser */
+        width: 100dvh;
+        height: 100vw;
+        padding: 16px;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+      #target.force-landscape:-webkit-full-screen {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        width: 100dvh;
+        height: 100vw;
+        transform: translate(-50%, -50%) rotate(90deg);
+      }
+    }
+
     video { width: 100%; border-radius: 10px; background: #000; }
 
     #log {
@@ -149,6 +173,9 @@
     </div>
     <button id="btn-element">Element: requestFullscreen()</button>
     <button id="btn-smart" class="secondary">Mit Fallback (API → Pseudo-Fullscreen)</button>
+    <button id="btn-landscape">Landscape erzwingen</button>
+    <p class="muted">Versucht <code>screen.orientation.lock('landscape')</code> (benötigt in der Regel echten Fullscreen).
+      Gelingt das nicht – wie auf dem iPhone –, wird das Element im Hochformat per CSS um 90° gedreht.</p>
   </section>
 
   <!-- 3. Video -->
@@ -176,6 +203,8 @@
       • <b>iPad (iPadOS ≥ 12):</b> <code>webkitRequestFullscreen()</code>, ab 16.4 auch ungeprefixt <code>requestFullscreen()</code>.<br>
       • <b>Alternative auf dem iPhone:</b> Pseudo-Fullscreen per CSS (<code>position:fixed; height:100dvh</code>) oder die Seite
       via „Zum Home-Bildschirm“ als Web-App starten (<code>display-mode: standalone</code> – ganz ohne Safari-Leisten).<br>
+      • <b>Querformat erzwingen:</b> <code>screen.orientation.lock()</code> funktioniert nur auf Android (Chrome) im Fullscreen; Safari/iOS unterstützt es nicht.
+      Auf dem iPhone bleibt nur das Drehen per CSS (<code>transform: rotate(90deg)</code>) oder ein Hinweis „Bitte Gerät drehen“.<br>
       • Alle Fullscreen-Aufrufe müssen aus einer Benutzer-Geste (z.&nbsp;B. <code>click</code>) heraus erfolgen.
     </p>
   </section>
@@ -236,6 +265,13 @@
   }
 
   function exitFs() {
+    if (target.classList.contains('force-landscape')) {
+      target.classList.remove('force-landscape');
+      log('Erzwungenes Querformat (CSS) beendet');
+    }
+    if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+      try { screen.orientation.unlock(); } catch (e) { /* nicht gesperrt / nicht unterstützt */ }
+    }
     if (target.classList.contains('pseudo-fullscreen')) {
       target.classList.remove('pseudo-fullscreen');
       document.body.classList.remove('no-scroll');
@@ -278,6 +314,45 @@
     });
   });
 
+  // ---------- Landscape erzwingen ----------
+  $('btn-landscape').addEventListener('click', async () => {
+    const canLock = !!(screen.orientation && typeof screen.orientation.lock === 'function');
+    const apiAvailable = document.fullscreenEnabled || document.webkitFullscreenEnabled;
+    log(`screen.orientation.lock vorhanden: ${canLock} · aktuell: ${screen.orientation?.type || 'unbekannt'}`);
+
+    // 1. Echter Fullscreen (wird von orientation.lock() meist vorausgesetzt).
+    //    Muss synchron im Klick-Handler angestossen werden (Benutzer-Geste).
+    if (apiAvailable) {
+      try {
+        await requestFs(target);
+      } catch (e) {
+        log('✘ Fullscreen: ' + e.name + ': ' + e.message);
+      }
+    }
+
+    // 2. Orientierung sperren
+    if (canLock) {
+      try {
+        log("→ screen.orientation.lock('landscape')");
+        await screen.orientation.lock('landscape');
+        log('✔ Orientierung gesperrt: ' + screen.orientation.type);
+        return;
+      } catch (e) {
+        log('✘ orientation.lock: ' + e.name + ': ' + e.message);
+      }
+    }
+
+    // 3. Fallback: per CSS drehen (greift nur, solange das Gerät im Hochformat ist)
+    log('→ CSS-Fallback: Element wird im Hochformat um 90° gedreht');
+    target.classList.add('force-landscape');
+    if (!getFullscreenElement()) enterPseudoFullscreen();
+    $('target-state').textContent += ' · Querformat erzwungen (CSS)';
+  });
+
+  window.matchMedia('(orientation: landscape)').addEventListener('change', (e) =>
+    log('Geräte-Orientierung: ' + (e.matches ? 'Querformat' : 'Hochformat'))
+  );
+
   $('btn-exit').addEventListener('click', (e) => {
     e.stopPropagation();
     exitFs();
@@ -288,6 +363,7 @@
       const el = getFullscreenElement();
       log(`Event ${type}: fullscreenElement = ${el ? (el.id || el.tagName) : 'null'}`);
       if (!target.classList.contains('pseudo-fullscreen')) {
+        if (!el) target.classList.remove('force-landscape');
         $('target-state').textContent = el === target ? 'echter Fullscreen' : 'normaler Modus';
       }
     })
